@@ -95,6 +95,7 @@ def Cnew_network_device(login, description="",name=None,ip_address=None,radius_s
 
 def Cget_network_device(login):
     json_data = ApiPolicyElements.get_network_device(login)["_embedded"]["items"]
+    #print(format_json(json_data))
     for data in json_data:
         print("id: {} name: {} ip_address: {}".format(data['id'], data['name'], data['ip_address']))
     return json_data
