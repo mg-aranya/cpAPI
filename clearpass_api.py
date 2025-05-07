@@ -1,6 +1,18 @@
 #!/usr/bin/python3
-
+# ====================================================================================
+# title             :clearpass_api.py
+# description       :Script using ClearPass API to read and modify configuration
+# author            :Mathias Granlund [mathias.granlund@aranya.se]
+# date              :20250501
+# version           :0.1
+# usage             :clearpass_api.py --help for help
+# functionality     :List, Add, or Delete Network Devices 
+#                   :
+# notes             :
+# python_version    :3.10.12
+# ====================================================================================
 from pyclearpass import *
+from ARApy import *
 import json
 import requests
 import argparse
@@ -8,153 +20,135 @@ import csv
 import os
 import sys
 import time
-#h6jXPUUZh/GzktMFw0Sr/Is1WeISEwAQF+k7bTFH7393
-#627bdaeafa8540e5bc87f583d132b7b90309ec1c
 
-def menu():
-    print("\n=== Main Menu ===")
-    print("1. Print all network devices")
-    print("2. Print network device by name")
-    print("3. Add network device")
-    print("4. Delete network device by name")
-    print("99. Exit")
 
-def YesNo(name):
-    yes = {'yes','y'}
-    no = {'no','n'}
-    while True:
-        try:
-            print("Enter 'yes' or 'no'")
-            choice = input(":").lower()
-            if choice in yes:
-               return True
-            elif choice in no:
-               return False
-            else:
-               print("Please respond with 'yes' or 'no'")
-        except KeyboardInterrupt:
-            print("\nControl-C... Exiting")
-            sys.exit()
+def arguments():
+    # construct the argument parse and parse the arguments
+    parse = argparse.ArgumentParser(prog='ClearPass_API.py', add_help=True)
+    
+    # Group argGroupMenu
+    argGroupMenu = parse.add_mutually_exclusive_group(required=False)
+    argGroupMenu.add_argument(
+        '-m',
+        '--menu',
+        required=False,
+        help='enter menu mode',
+        default=False,
+        action='store_true')
 
-def errorHandling(json_data):
-    HTTPStatus = {
-    "200": "OK",
-    "201": "Created",
-    "204": "No Content",
-    "304": "Not Modified",
-    "400": "Bad Request",
-    "401": "Unauthorized",
-    "403": "Forbidden",
-    "404": "Not Found",
-    "406": "Not Acceptable",
-    "415": "Unsupported Media Type",
-    "422": "Unprocessable Entity"
-    }
-    try:
-        print("HTTP Status: {} {}".format(json_data['status'],json_data['detail']))
-        return False
-    except KeyError:
-        return True
+    # Group argGroupNetDevice
+    # description="",name=None,ip_address=None,radius_secret=None,tacacs_secret=None,vendor_name=None
+    # python3 clearpass_api.py -l
+    # python3 clearpass_api.py -a -n device1 -i 127.0.0.1/32 -r abc123 -t def456 -v aruba
+    # python3 clearpass_api.py -d device1
+    argGroupNetDevice = parse.add_mutually_exclusive_group(required=True)
+    argGroupNetDevice.add_argument(
+        '-l',
+        '--list',
+        dest='list',
+        required=False,
+        action='store_true',
+        help='list all network devices')
+    argGroupNetDevice.add_argument(
+        '-a',
+        '--add',
+        dest='add',
+        required=False,
+        action='store_true',
+        help='add a new network device')
+    argGroupNetDevice.add_argument(
+        '-d',
+        '--delete',
+        dest='delete',
+        required=False,
+        action='store_true',
+        help='delete a network device')
 
-def format_json(data: dict) -> str:
-    return json.dumps(data, indent=2)
+    # Group argGroupNetDeviceFlags
+    argGroupNetDeviceFlags = parse.add_argument_group('NetDevice')
+    argGroupNetDeviceFlags.add_argument(
+        '-b',
+        dest='description',
+        required=False,
+        help='meaningful description')
+    argGroupNetDeviceFlags.add_argument(
+        '-n',
+        dest='name',
+        required=False,
+        help='device hostname [FQDN]')
+    argGroupNetDeviceFlags.add_argument(
+        '-i',
+        dest='ip-address',
+        required=False,
+        help='IPv4 format [CIDR]')
+    argGroupNetDeviceFlags.add_argument(
+        '-r',
+        dest='RADIUS-PSK',
+        required=False,
+        default=None,
+        help='max lenght 31 characters [RFC2865]')
+    argGroupNetDeviceFlags.add_argument(
+        '-t',
+        dest='TACACS-PSK',
+        required=False,
+        default=None,
+        help='max lenght 31 characters [RFC2865]')
+    argGroupNetDeviceFlags.add_argument(
+        '-v',
+        dest='vendor',
+        metavar='VENDOR',
+        choices=['Aruba', 'Cisco','Palo Alto', 'Juniper'],
+        required=False,
+        default=None,
+        help='vendor name')
 
-def readcsv(file):
-    with open(file, 'rt') as csvfile:
-        readfile = csv.reader(csvfile, delimiter=',')
-        for row in readfile:
-            row[0]
+    parse.add_argument(
+        '-f',
+        required=False,
+        dest='file',
+        help='path to config file (csv)')
+    return parse.parse_args()
 
-def Cnew_network_device(login, description="",name=None,ip_address=None,radius_secret=None,tacacs_secret=None,vendor_name=None):
-    if not name:
-        name = input("Name: ").strip()
-    if not description:
-        description = input("Description: ").strip()
-    if not ip_address:
-        ip_address = input("IP-Address (With CIDR mask): ").strip()
-    if not radius_secret:
-        radius_secret = input("RADIUS PSK: ").strip()
-    if not tacacs_secret:
-        tacacs_secret = input("TACACS+ PSK: ").strip()
-    if not vendor_name:
-        vendor_name = input("Vendor Name: ").strip()
-    body={
-    "description" : description, #Description of the network device. Object Type: string
-    "name" : name, #Name of the network device. Object Type: string
-    "ip_address" : ip_address, #IP or Subnet Address of the network device. Object Type: string
-    "radius_secret" : radius_secret, #RADIUS Shared Secret of the network device. Object Type: string
-    "tacacs_secret" : tacacs_secret, #TACACS+ Shared Secret of the network device. Object Type: string
-    "vendor_name" : vendor_name, #Vendor Name of the network device. Object Type: string
-    "coa_capable" : True, #Flag indicating if the network device is capable of CoA. Object Type: boolean
-    "coa_port" : 3799, #CoA port number of the network device. Object Type: integer
-    }
-    json_data = ApiPolicyElements.new_network_device(login, body)
-    if errorHandling(json_data):
-        print("id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
-    return json_data
 
-def Cget_network_device(login):
-    json_data = ApiPolicyElements.get_network_device(login)["_embedded"]["items"]
-    #print(format_json(json_data))
-    for data in json_data:
-        print("id: {} name: {} ip_address: {}".format(data['id'], data['name'], data['ip_address']))
-    return json_data
-
-def Cget_network_device_name_by_name(login, name=None):
-    if name == None: 
-        name = input("Enter name: ").strip()
-    json_data = ApiPolicyElements.get_network_device_name_by_name(login,name)
-    if errorHandling(json_data):
-        print("id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
-        return json_data
-    else:
-        return False
-
-def Cdelete_network_device_name_by_name(login, name=None):
-    if name == None:     
-        name = input("Enter name of the device you want to delete: ").strip()
-    try:
-        json_data = Cget_network_device_name_by_name(login, name)
-        if errorHandling:
-            if json_data['name'] == name:
-                print("Are you sure you want to delete '{}'".format(json_data['name']))
-                if YesNo(name):
-                    print("Deleting device id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
-                    json_data = ApiPolicyElements.delete_network_device_name_by_name(login, name)
-    except KeyError:
-        print("Unable to find device '{}'".format(name))
-        return False                      
-    return json_data
-
-### main loop ###
 def main():
-    login = ClearPassAPILogin(
-    server="https://192.168.100.30:443/api",
-    granttype="client_credentials",
-    clientsecret="h6jXPUUZh/GzktMFw0Sr/Is1WeISEwAQF+k7bTFH7393",
-    clientid="Client2",
-    verify_ssl=False)
+    args = arguments()
     while True:
-        try:
-            menu()
-            choice = input("Enter your choice: ").strip()
-            match choice:
-                case '1':
-                    json_data = Cget_network_device(login)
-                case '2':
-                    json_data = Cget_network_device_name_by_name(login)
-                case '3':
-                    json_data = Cnew_network_device(login)
-                case '4':
-                    json_data = Cdelete_network_device_name_by_name(login)                
-                case '99':
-                    sys.exit()
-                case _:
-                    print("Invalid choice.")
-
-        except KeyboardInterrupt:
-            print("\nControl-C... Exiting")
-            sys.exit()
+        if args.menu:
+            try:
+                menu()
+                choice = input("Enter your choice: ").strip().lower()
+                match choice:
+                    case '1':
+                        json_data = Cget_network_device(credentials())
+                    case '2':
+                        json_data = Cget_network_device_name_by_name(credentials())
+                    case '3':
+                        json_data = Cnew_network_device(credentials())
+                    case '4':
+                        json_data = Cdelete_network_device_name_by_name(credentials())
+                    case '5':
+                        pass
+                    case '6':
+                        pass
+                    case '7':
+                        pass
+                    case '8':
+                        pass
+                    case '9':
+                        pass
+                    case '10':
+                        pass 
+                    case '99':
+                        sys.exit()
+                    case _:
+                        parse.print_help()
+                        print("Invalid choice.")
+            except (KeyboardInterrupt, EOFError) as error:
+                print("\nControl-C... Exiting")
+                sys.exit()
+        else:
+            print(args)
+            break
 
 if __name__ == "__main__":
     main()
