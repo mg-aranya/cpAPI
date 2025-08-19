@@ -26,18 +26,21 @@ from ARApy import *
 
 def main():
     args = arguments()
-    if args.menu:
+    print(args)
+    if args.command == 'menu':
         menu()
-    elif args.device:
-        if args.list:
+    elif args.command == 'device':
+        netDeviceHandler(args)
+        return
+        if args.sub_command == 'list':
             json_data = Cget_network_device(credentials())
-        if args.add:
-            json_data = Cnew_network_device(credentials(), args.description, args.name, args.ipv4, args.RADIUSKEY, args.TACACSKEY, args.vendor)
-    elif args.cert:
-        if args.list:
+        if args.sub_command == 'add':
+            json_data = Cnew_network_device(credentials(), args.description, args.name, args.ipv4, args.radius_secret, args.tacacs_secret, args.vendor)
+    elif args.command == 'certificate':
+        if args.sub_command == 'list':
             json_data = Cget_cert_trust_list(credentials())
         else:
-            print("Invalid args")
+            return
 
 if __name__ == "__main__":
     main()
