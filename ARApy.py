@@ -5,176 +5,210 @@ def menu():
     while True:
         try:
             print("\n=== Main Menu ===")
-            print("1. Print all network devices")
-            print("2. Print network device by name")
-            print("3. Add network device")
-            print("4. Delete network device by name")
-            print("5. Print Certificate Trust List")
-            print("6. Print Certificate Trust List by name (PEM)")
+            print("01. Print all network devices")
+            print("02. Print network device by name")
+            print("03. Add network device")
+            print("04. Delete network device by name")
+            print("05. Print Certificate Trust List")
+            print("06. Print Certificate Trust List by name (PEM)")
+            print("07. Print all Role Mapping policies")
+            print("08. Print Role Mapping reference by id")
+            print("09. Print all Services")
+            print("10. Print Service reference by id")
+            print("11. Print all Enforcement policies")
             print("99. Exit")
             choice = input("Enter your choice: ").strip()
             match choice:
                 case '1':
-                    json_data = Cget_network_device(credentials())
+                    json_data = netDeviceListAll(credentials())
                 case '2':
-                    json_data = Cget_network_device_name_by_name(credentials())
+                    json_data = netDeviceListByName(credentials())
                 case '3':
                     json_data = Cnew_network_device(credentials())
                 case '4':
-                    json_data = Cdelete_network_device_name_by_name(credentials())
+                    json_data = netDeviceDeleteByName(credentials())
                 case '5':
                     json_data = Cget_cert_trust_list(credentials())
                 case '6':
-                    json_data= Cget_cert_trust_list_by_cert_trust_list_id(credentials())
+                    json_data = Cget_cert_trust_list_by_cert_trust_list_id(credentials())
                 case '7':
-                    pass
+                    json_data = roleMappingListAll(credentials())
                 case '8':
-                    pass
+                    json_data = roleMappingListByID(credentials())
                 case '9':
-                    pass
+                    json_data = serviceListAll(credentials())
                 case '10':
-                    pass 
+                    json_data = serviceListByID(credentials())
+                case '11':
+                    json_data = enforcementPolicyListByName(credentials())
                 case '99':
-                    print(args)
-                    sys.exit()
+                    return
                 case _:
                     print("Invalid choice.")
         except (KeyboardInterrupt, EOFError) as error:
             print("\nControl-C... Exiting")
-            sys.exit()
+            return
 
 def arguments():
     # construct the argument parser. All arguments must be unique
     # upper and lower case args do not collide.
-    parse = argparse.ArgumentParser(prog='ClearPass_API.py', add_help=True)
+    parse = argparse.ArgumentParser(prog='ClearPass_API.py', add_help=True, description='ClearPass API tool')
+    subparsers = parse.add_subparsers(dest='command', required=True)
 
-    # Group argGroupMode. Mode flags MUST be uppercase
-    argGroupMode = parse.add_mutually_exclusive_group(required=True)
-    # menu mode
-    argGroupMode.add_argument(
-        '-M',
-        '--menu',
-        required=False,
-        help='menu mode',
-        default=False,
-        action='store_true')
-    # certificate management
-    argGroupMode.add_argument(
-        '-C',
-        '--cert',
-        dest='cert',
-        required=False,
-        action='store_true',
-        help='certificate management')
-    # network device management
-    argGroupMode.add_argument(
-        '-D',
-        '--device',
-        dest='device',
-        required=False,
-        action='store_true',
-        help='network device management')
+    ### Device command parser START ###
+    device_parser = subparsers.add_parser(
+        'device',
+        description='Module: Device',
+        help='Device operations')
+    device_subparsers = device_parser.add_subparsers(
+        dest="sub_command",
+        required=False)
 
-    # Group argGroupNetDevice
-    # description="",name=None,ip_address=None,radius_secret=None,tacacs_secret=None,vendor_name=None
-    # python3 clearpass_api.py -l
-    # python3 clearpass_api.py -a -n device1 -i 127.0.0.1/32 -r abc123 -t def456 -v aruba
-    # python3 clearpass_api.py -d device1
-    
-
-    argGroupNetDeviceMode = parse.add_mutually_exclusive_group(required=False)
-    # list all network devices
-    argGroupNetDeviceMode.add_argument(
-        '-l',
-        '--list',
-        dest='list',
-        required=False,
-        action='store_true',
-        help='list all objects in specified mode')
-    # delete a network device
-    argGroupNetDeviceMode.add_argument(
-        '-d',
-        '--delete',
-        dest='delete',
-        required=False,
-        action='store_true',
-        help='delete an object in specified mode ')
-    # add a new network device
-    argGroupNetDeviceMode.add_argument(
-        '-a',
-        '--add',
-        dest='add',
-        required=False,
-        action='store_true',
-        help='add a new object in specified mode')
-
-    # Group argGroupNetDeviceFlags
-    argGroupNetDeviceFlags = parse.add_argument_group('NetDevice')
+    # subparser add 
+    add_parser = device_subparsers.add_parser(
+        'add',
+        description='Function: Add',
+        help='Add a device')
     # description
-    argGroupNetDeviceFlags.add_argument(
-        '-b',
+    add_parser.add_argument(
+        '-d',
         dest='description',
         required=False,
-        help='meaningful description')
+        help='Meaningful description')
     # device hostname
-    argGroupNetDeviceFlags.add_argument(
+    add_parser.add_argument(
         '-n',
         dest='name',
-        required=False,
-        help='device hostname [FQDN]')
-    # ip-address
-    argGroupNetDeviceFlags.add_argument(
+        required=True,
+        help='Device hostname [FQDN]')
+    # ip address
+    add_parser.add_argument(
         '-i',
         dest='ipv4',
         metavar='IP-ADDRESS',
-        required=False,
+        required=True,
         help='IPv4 format [CIDR]')
-    # RADIUS-PSK
-    argGroupNetDeviceFlags.add_argument(
+    # RADIUS PSK
+    add_parser.add_argument(
         '-r',
-        dest='RADIUSKEY',
+        dest='radius_secret',
         metavar='RADIUS PSK',
         required=False,
         default=None,
-        help='max lenght 31 characters [RFC2865]')
-    # TACACS-PSK
-    argGroupNetDeviceFlags.add_argument(
+        help='Max lenght 31 characters [RFC2865]')
+    # TACACS PSK
+    add_parser.add_argument(
         '-t',
-        dest='TACACSKEY',
+        dest='tacacs_secret',
         metavar='TACACS PSK',
         required=False,
         default=None,
-        help='max lenght 31 characters [RFC2865]')
+        help='Max lenght 31 characters [RFC2865]')
     # vendor
-    argGroupNetDeviceFlags.add_argument(
+    add_parser.add_argument(
         '-v',
         dest='vendor',
         metavar='VENDOR',
-        choices=['aruba', 'cisco','palo alto', 'juniper'],
-        type=str.lower,
-        required=False,
+        choices=['Aruba', 'Cisco','Palo alto', 'Juniper'],
+        required=True,
         default=None,
-        help='vendor name')
-    
-    argGroupCertMGMT = parse.add_argument_group('CertMGMT')
-    # csr
-    argGroupCertMGMT.add_argument(
-        '--csr',
-        dest='csr',
-        required=False,
-        action='store_true',
-        help='create csr')
+        help='Vendor name')
 
-    # file as input
-    parse.add_argument(
-        '-f',
-        required=False,
-        dest='file',
-        help='path to config file')
+    # subparser delete
+    delete_parser = device_subparsers.add_parser(
+        'delete',
+        description='Function: Delete',
+        help='Delete a device')
+    delete_group = delete_parser.add_mutually_exclusive_group(required=True)
+    # delete by name
+    delete_group.add_argument(
+        '-n',
+        dest='name',
+        help='Device name')
+    # dekete by ID
+    delete_group.add_argument(
+        '--id',
+        help='Device ID')
+
+    # subparser list
+    list_parser = device_subparsers.add_parser(
+        'list',
+        description='Function: List',
+        help='List devices')
+    list_group = list_parser.add_mutually_exclusive_group(required=True)
+    # list by name
+    list_group.add_argument(
+        '-n',
+        dest='name',
+        help='List specific device by name')
+    # list by ID
+    list_group.add_argument(
+        '--id',
+        help='List specific device by id')
+    # list all
+    list_group.add_argument(
+        '--all',
+        help='List all devices',
+        action='store_true')
+    ### Device command parser END ###
+
+    ### Certificate command parser START ###
+    certificate_parser = subparsers.add_parser(
+        'certificate',
+        description='Module: Certificate',
+        help='Certificate operations')
+    certificate_subparsers = certificate_parser.add_subparsers(
+        dest='sub_command',
+        required=False)
+
+    # subparser list
+    list_parser = certificate_subparsers.add_parser(
+        'list',
+        description='Function: List',
+        help='List Trusted CA')
+    list_group = list_parser.add_mutually_exclusive_group(required=True)
+    # list by name
+    list_group.add_argument(
+        '-n',
+        dest='name',
+        help='List specific CA by name')
+    # list by ID
+    list_group.add_argument(
+        '--id',
+        help='List specific CA by id')
+    # list all
+    list_group.add_argument(
+        '--all',
+        help='List all CA',
+        action='store_true')
+
+    ### Certificate command parser END ###
+
+
+    ### Menu command parser START ###
+    menu_parser = subparsers.add_parser(
+        'menu',
+        description='Module: Menu',
+        help='Menu mode')
+    menu_subparsers = menu_parser.add_subparsers(
+        dest='sub_command',
+        required=False)
+
+    # subparser menu
+    list_parser = menu_subparsers.add_parser(
+        'enter',
+        description='Function: Menu',
+        help='Enter menu mode')
+    list_group = list_parser.add_mutually_exclusive_group(required=True)
+    list_group.add_argument(
+    '-cli',
+    help='cli menu',
+    action='store_true')
+
 
     return parse.parse_args()
 
-def YesNo(name):
+def confirm(choice='no'):
     yes = {'yes','y'}
     no = {'no','n'}
     while True:
@@ -229,21 +263,44 @@ def readcsv(file):
         for row in readfile:
             row[0]
 
-def Cnew_network_device(login,description=None,name=None,ip_address=None,radius_secret=None,tacacs_secret=None,vendor_name=None):
-    if not name:
-        name = input("Name: ").strip()
-    if not description:
-        description = input("Description: ").strip()
-    if not ip_address:
-        ip_address = input("IP-Address (With CIDR mask): ").strip()
-    if not vendor_name:
-        vendor_name = input("Vendor Name: ").strip()
-    if radius_secret or tacacs_secret:
-        pass
-    elif not radius_secret:
-        radius_secret = input("RADIUS PSK: ").strip()
-    elif not tacacs_secret:
-        tacacs_secret = input("TACACS+ PSK: ").strip()
+def netDeviceHandler(args):
+    if args.sub_command == 'add':
+        json_data = netDeviceAdd(credentials())
+    elif args.sub_command == 'delete':
+        if args.name:
+            json_data = netDeviceDeleteByName(credentials(),args.name)
+        if args.id:
+            json_data = netDeviceDeleteByID(credentials(),args.id)
+    elif args.sub_command == 'list':
+        if args.name:
+            json_data = netDeviceListByName(login=credentials(),name=args.name)
+        if args.id:
+            json_data = netDeviceListByID(credentials(),args.id)
+        if args.all:
+            json_data = netDeviceListAll(credentials())
+    else:
+        return 0
+    return json_data
+
+def netDeviceAdd(login,description=None,name=None,ip_address=None,radius_secret=None,tacacs_secret=None,vendor_name=None):
+    try:
+        if not name:
+            name = input("Name: ").strip()
+        if not description:
+            description = input("Description: ").strip()
+        if not ip_address:
+            ip_address = input("IP-Address (With CIDR mask): ").strip()
+        if not vendor_name:
+            vendor_name = input("Vendor Name: ").strip()
+        if radius_secret or tacacs_secret:
+            pass
+        elif not radius_secret:
+            radius_secret = input("RADIUS PSK: ").strip()
+        elif not tacacs_secret:
+            tacacs_secret = input("TACACS+ PSK: ").strip()
+    except (KeyboardInterrupt, EOFError) as error:
+        print("\nControl-C... Exiting")
+        return
 
     body={
     "description": description, #Description of the network device. Object Type: string
@@ -260,14 +317,7 @@ def Cnew_network_device(login,description=None,name=None,ip_address=None,radius_
         print("id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
     return json_data
 
-def Cget_network_device(login):
-    json_data = ApiPolicyElements.get_network_device(login)["_embedded"]["items"]
-    #print(format_json(json_data))
-    for data in json_data:
-        print("id: {} name: {} ip_address: {}".format(data['id'], data['name'], data['ip_address']))
-    return json_data
-
-def Cget_network_device_name_by_name(login, name=None):
+def netDeviceListByName(login, name=None):
     if name == None: 
         name = input("Enter name: ").strip()
     json_data = ApiPolicyElements.get_network_device_name_by_name(login,name)
@@ -277,20 +327,52 @@ def Cget_network_device_name_by_name(login, name=None):
     else:
         return json_data
 
-def Cdelete_network_device_name_by_name(login, name=None):
+def netDeviceListByID(login, id=None):
+    if id == None: 
+        id = input("Enter name: ").strip()
+    json_data = ApiPolicyElements.get_network_device_by_network_device_id(login,id)
+    if errorHandling(json_data):
+        print("id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
+        return json_data
+    else:
+        return json_data
+
+def netDeviceListAll(login):
+    json_data = ApiPolicyElements.get_network_device(login)["_embedded"]["items"]
+    for data in json_data:
+        print("id: {} name: {} ip_address: {}".format(data['id'], data['name'], data['ip_address']))
+    return json_data
+
+def netDeviceDeleteByName(login, name=None):
     if name == None:     
         name = input("Enter name of the device you want to delete: ").strip()
     try:
-        json_data = Cget_network_device_name_by_name(login, name)
+        json_data = netDeviceListByName(login, name)
         if errorHandling:
             if json_data['name'] == name:
                 print("Are you sure you want to delete '{}'".format(json_data['name']))
-                if YesNo(name):
+                if confirm(name):
                     print("Deleting device id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
                     json_data = ApiPolicyElements.delete_network_device_name_by_name(login, name)
     except KeyError:
         print("Unable to find device '{}'".format(name))
         return False                      
+    return json_data
+
+def netDeviceDeleteByID(login, id=None):
+    if id == None:     
+        id = input("Enter id of the device you want to delete: ").strip()
+    try:
+        json_data = netDeviceListByID(login, id)
+        if errorHandling:
+            if json_data['id'] == int(id):
+                print("Are you sure you want to delete '{}'".format(json_data['id']))
+                if confirm(id):
+                    print("Deleting device id: {} name: {} ip_address: {}".format(json_data['id'], json_data['name'], json_data['ip_address']))
+                    json_data = ApiPolicyElements.delete_network_device_by_network_device_id(login, id)
+    except KeyError:
+        print("Unable to find device '{}'".format(id))
+        return 0                      
     return json_data
 
 def Cget_cert_trust_list(login, filter=""):
@@ -344,3 +426,46 @@ def CSR(login, body=({})):
         }
 
     ApiCertificateAuthority.new_certificate_new(login, body)
+
+def roleMappingListAll(login):
+    json_data = ApiPolicyElements.get_role_mapping(login)["_embedded"]["items"]
+    for data in json_data:
+        print("id: {} name: {}".format(data['id'], data['name']))
+    return json_data
+
+def roleMappingListByID(login, id=None):
+    if id == None: 
+        id = input("Enter id: ").strip()
+    json_data = ApiPolicyElements.get_role_mapping_by_role_mapping_id(login,id)
+    print(format_json(json_data))
+    if errorHandling(json_data):
+        #print("id: {} name: {}".format(json_data['id'], json_data['name']))
+        return json_data
+    else:
+        return json_data
+
+def serviceListAll(login):
+    json_data = ApiPolicyElements.get_config_service(login)["_embedded"]["items"]
+    for data in json_data:
+        print("id: {} name: {}".format(data['id'], data['name']))
+    return json_data
+
+def serviceListByID(login, id=None):
+    if id == None: 
+        id = input("Enter id: ").strip()
+    json_data = ApiPolicyElements.get_config_service_by_services_id(login,id)
+    print(format_json(json_data))
+    if errorHandling(json_data):
+        #print("id: {} name: {}".format(json_data['id'], json_data['name']))
+        return json_data
+    else:
+        return json_data
+
+def enforcementPolicyListByName(login, name=None):
+    if name == None: 
+        name = input("Enter name: ").strip()
+    json_data = ApiPolicyElements.get_enforcement_policy_name_by_name(login, name)
+    print(format_json(json_data))
+    for data in json_data:
+        pass#print("id: {} name: {}".format(data['id'], data['name']))
+    return json_data
